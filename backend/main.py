@@ -8,7 +8,8 @@ from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 from gemini_service import analyze_image
 from search_service import search_garment
-from models import Report, UserProfile
+from evidence_service import verify_product, build_assessment
+from models import Report, UserProfile, ProductEvidence
 
 app = FastAPI(title="Thrift Fit Scanner API")
 app.add_middleware(
@@ -42,7 +43,8 @@ async def analyze(image: UploadFile = File(...), profile: str = Form(...)):
     try:
         garment = await run_in_threadpool(analyze_image, image_bytes, image.content_type)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Image analysis failed; check Gemini key/model") from exc
+        print("GEMINI ERROR:", repr(exc))
+        raise HTTPException(status_code=502, detail="Image analysis failed; check server logs") from exc
 
     sources = []
     search_error = None
@@ -50,20 +52,42 @@ async def analyze(image: UploadFile = File(...), profile: str = Form(...)):
         if os.getenv("SERPAPI_KEY"):
             try:
                 sources = await run_in_threadpool(search_garment, garment)
-            except Exception:
+            except Exception as exc:
+                print("SEARCH ERROR:", repr(exc))
                 search_error = "Product search unavailable"
         else:
             search_error = "SERPAPI_KEY not configured"
 
-    alerts = [trigger for trigger in user.triggers
-              if any(trigger.casefold() == material.casefold() and percentage > 0
-                     for material, percentage in garment.materials.items())]
+    try:
+        evidence = await run_in_threadpool(verify_product, garment, sources)
+    except Exception as exc:
+        print("PRODUCT VERIFICATION ERROR:", repr(exc))
+        evidence = ProductEvidence(
+            exact_match=False,
+            reason="Verification unavailable",
+            materials=[],
+            chest_inches=None,
+            length_inches=None,
+            source_urls=[],
+        )
+
+    assessment = build_assessment(garment, user, evidence)
+    checked_materials = garment.materials or (evidence.materials if evidence.exact_match else [])
+    alerts = [
+        trigger for trigger in user.triggers
+        if any(trigger.casefold() == material.name.casefold() and material.percentage > 0
+               for material in checked_materials)
+    ]
+
     return Report(
         garment=garment,
         sensory_alerts=alerts,
-        material_status="label_read" if garment.materials else "unknown",
-        fit_status="unknown",  # Measurements from the garment are not yet verified.
+        material_status=("label_read" if garment.materials else
+                         "product_match" if evidence.exact_match and evidence.materials else "unknown"),
+        fit_status=assessment.fit_status,
         condition=garment.visible_defects,
         sources=sources,
         search_error=search_error,
+        product_evidence=evidence,
+        assessment=assessment,
     )

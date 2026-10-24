@@ -7,19 +7,42 @@ class UserProfile(BaseModel):
     triggers: list[str] = Field(default_factory=list)
 
 
+class Material(BaseModel):
+    name: str
+    percentage: float = Field(ge=0, le=100)
+
+
 class GarmentInfo(BaseModel):
-    brand: str | None = None
-    garment_type: str | None = None
-    size: str | None = None
-    product_name: str | None = None
-    materials: dict[str, float] = Field(default_factory=dict)
-    visible_defects: list[str] = Field(default_factory=list)
+    brand: str | None
+    garment_type: str | None
+    size: str | None
+    product_name: str | None
+    materials: list[Material]
+    visible_defects: list[str]
 
 
 class Source(BaseModel):
     title: str | None = None
     url: str | None = None
     snippet: str = ""
+
+
+class ProductEvidence(BaseModel):
+    exact_match: bool
+    reason: str
+    materials: list[Material]
+    chest_inches: float | None
+    length_inches: float | None
+    source_urls: list[str]
+
+
+class FinalAssessment(BaseModel):
+    fit_status: str
+    fit_message: str
+    sensory_status: str
+    sensory_message: str
+    condition_message: str
+    recommendation: str
 
 
 class Report(BaseModel):
@@ -30,3 +53,5 @@ class Report(BaseModel):
     condition: list[str]
     sources: list[Source]
     search_error: str | None = None
+    product_evidence: ProductEvidence | None = None
+    assessment: FinalAssessment | None = None
