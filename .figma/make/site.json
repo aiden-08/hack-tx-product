@@ -1,0 +1,11 @@
+{
+  "title": "WolfWeave",
+  "description": "Scan thrifted clothing to check fit, fabric sensitivities, microplastic content, and visible wear, helping shoppers make confident secondhand finds.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
