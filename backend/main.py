@@ -150,7 +150,7 @@ async def analyze(
         for trigger in user.triggers
         if any(
             trigger.casefold() == material.name.casefold()
-            and material.percentage > 0
+            and (material.percentage is None or material.percentage > 0)
             for material in checked_materials
         )
     ]

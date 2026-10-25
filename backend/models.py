@@ -2,8 +2,8 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 class UserProfile(BaseModel):
-    chest: float | None = Field(default=None, gt=0)
-    waist: float | None = Field(default=None, gt=0)
+    chest: float | None = Field(default=None, gt=0, description="Chest circumference in inches")
+    waist: float | None = Field(default=None, gt=0, description="Waist circumference in inches")
     triggers: list[str] = Field(default_factory=list)
     preferred_fit: Literal["slim", "regular", "relaxed"] = "regular"
 
@@ -15,7 +15,7 @@ class GarmentMeasurements(BaseModel):
 
 class Material(BaseModel):
     name: str
-    percentage: float = Field(ge=0, le=100)
+    percentage: float | None = Field(default=None, ge=0, le=100)
 
 
 class GarmentInfo(BaseModel):

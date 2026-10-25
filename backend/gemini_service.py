@@ -22,8 +22,18 @@ Identify the brand, garment type, size and product name if visible.
 Record visible defects such as stains, holes and pilling.
 
 Prioritize readable tag information for brand, size and fiber composition.
-Only extract fiber percentages when clearly legible on an actual
-composition label. Never guess fabric composition from appearance.
+Read the garment's material information from its label.
+
+If the label identifies materials without percentages, include
+those materials with percentage set to null.
+
+Only assign numeric percentages when explicitly printed on the label.
+
+Never guess percentages or materials from appearance.
+
+For example, if a label says "Mohair/Wool Blend", return:
+- Mohair: percentage null
+- Wool: percentage null
 
 Use null for unknown identifying fields, an empty materials list
 when composition cannot be verified, and an empty defects list

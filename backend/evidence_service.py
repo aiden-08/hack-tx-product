@@ -23,7 +23,7 @@ not flat pit-to-pit width. Do not treat the size label alone as proof of fit.
 GARMENT: {garment.model_dump_json()}
 SEARCH RESULTS:\n{text}"""
     response = client.models.generate_content(
-        model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+        model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         contents=prompt,
         config=types.GenerateContentConfig(response_mime_type="application/json",
                                            response_schema=ProductEvidence),
@@ -46,7 +46,7 @@ def build_assessment(garment: GarmentInfo, user: UserProfile,
     """Conservative fit guidance; garment measurements are optional."""
     materials = garment.materials or (evidence.materials if evidence.exact_match else [])
     alerts = [t for t in user.triggers if any(t.casefold() == m.name.casefold()
-              and m.percentage > 0 for m in materials)]
+        and (m.percentage is None or m.percentage > 0) for m in materials)]
     if alerts:
         sensory_status = "warning"
         sensory_message = "Selected fabric triggers found: " + ", ".join(alerts)

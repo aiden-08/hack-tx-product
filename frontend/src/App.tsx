@@ -269,7 +269,7 @@ type Analysis = {
     product_name: string | null;
     materials: {
       name: string;
-      percentage: number;
+      percentage: number | null;
     }[];
     visible_defects: string[];
   };
@@ -601,7 +601,11 @@ function Report({
 
   const materialSummary = garment.materials.length
     ? garment.materials
-        .map(m => `${m.percentage}% ${m.name}`)
+        .map(m =>
+          m.percentage == null
+            ? `${m.name} (percentage unknown)`
+            : `${m.percentage}% ${m.name}`
+        )
         .join(", ")
     : "Fabric composition not confirmed";
 
