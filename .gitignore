@@ -1,0 +1,20 @@
+# Python
+**/.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Node / Vite
+**/node_modules/
+**/dist/
+**/.vite/
+
+# Editors / OS
+.vscode/
+.DS_Store
+Thumbs.db
