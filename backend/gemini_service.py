@@ -1,6 +1,7 @@
 import os
 from google import genai
 from google.genai import types
+from google.genai.errors import ServerError
 from models import GarmentInfo
 
 
