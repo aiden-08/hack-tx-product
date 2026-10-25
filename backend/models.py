@@ -1,10 +1,16 @@
 from pydantic import BaseModel, Field
-
+from typing import Literal
 
 class UserProfile(BaseModel):
-    chest: float | None = Field(default=None, gt=0, description="Chest circumference in inches")
-    waist: float | None = Field(default=None, gt=0, description="Waist circumference in inches")
+    chest: float | None = Field(default=None, gt=0)
+    waist: float | None = Field(default=None, gt=0)
     triggers: list[str] = Field(default_factory=list)
+    preferred_fit: Literal["slim", "regular", "relaxed"] = "regular"
+
+
+class GarmentMeasurements(BaseModel):
+    pit_to_pit_inches: float | None = Field(default=None, gt=0, le=60)
+    length_inches: float | None = Field(default=None, gt=0, le=80)
 
 
 class Material(BaseModel):
@@ -44,6 +50,14 @@ class FinalAssessment(BaseModel):
     condition_message: str
     recommendation: str
 
+class PriceRating(BaseModel):
+    rating: str
+    suggested_max_price: float | None = None
+    comparable_price: float | None = None
+    match_type: str
+    message: str
+    source_urls: list[str] = Field(default_factory=list)
+
 
 class Report(BaseModel):
     garment: GarmentInfo
@@ -55,3 +69,4 @@ class Report(BaseModel):
     search_error: str | None = None
     product_evidence: ProductEvidence | None = None
     assessment: FinalAssessment | None = None
+    price_rating: PriceRating | None = None

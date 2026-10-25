@@ -1,7 +1,7 @@
 import os
 from google import genai
 from google.genai import types
-from models import GarmentInfo, Source, ProductEvidence, FinalAssessment, UserProfile
+from models import GarmentInfo, Source, ProductEvidence, FinalAssessment, UserProfile, GarmentMeasurements
 
 
 def verify_product(garment: GarmentInfo, sources: list[Source]) -> ProductEvidence:
@@ -41,8 +41,9 @@ SEARCH RESULTS:\n{text}"""
 
 
 def build_assessment(garment: GarmentInfo, user: UserProfile,
-                     evidence: ProductEvidence) -> FinalAssessment:
-    """Deterministic assessment; does not need another API call."""
+                     evidence: ProductEvidence,
+                     measurements: GarmentMeasurements | None = None) -> FinalAssessment:
+    """Conservative fit guidance; garment measurements are optional."""
     materials = garment.materials or (evidence.materials if evidence.exact_match else [])
     alerts = [t for t in user.triggers if any(t.casefold() == m.name.casefold()
               and m.percentage > 0 for m in materials)]
@@ -56,21 +57,60 @@ def build_assessment(garment: GarmentInfo, user: UserProfile,
         sensory_status = "unknown"
         sensory_message = "Fabric composition not verified; check the care label."
 
-    if user.chest is not None and evidence.exact_match and evidence.chest_inches is not None:
-        ease = evidence.chest_inches - user.chest
-        fit_status = "measurement_available"
-        fit_message = f"Garment chest ease: {ease:+.1f} inches. Fit depends on style and preference."
+    measurements = measurements or GarmentMeasurements()
+    garment_chest = None
+    source = None
+    if measurements.pit_to_pit_inches is not None:
+        garment_chest = measurements.pit_to_pit_inches * 2
+        source = "Your flat pit-to-pit measurement"
+    elif evidence.exact_match and evidence.chest_inches is not None:
+        garment_chest = evidence.chest_inches
+        source = "Verified product garment measurement"
+
+    if user.chest is not None and garment_chest is not None:
+        ease = garment_chest - user.chest
+        fit_status = "Measured fit guidance"
+        if ease < 0:
+            description = "Smaller than your chest circumference; may be too tight."
+        elif ease < 2:
+            description = "Very little chest room; may feel snug."
+        elif ease < 4:
+            description = "Some chest room; may fit close to the body."
+        elif ease < 7:
+            description = "Moderate chest room; may suit a regular fit."
+        else:
+            description = "Generous chest room; may suit a relaxed fit."
+        fit_message = (f"{source}: {garment_chest:.1f} in chest circumference. "
+                       f"Estimated chest room: {ease:+.1f} in. {description} "
+                       "These are approximate guidelines; stretch, shoulders, sleeves "
+                       f"and your preferred {user.preferred_fit} fit still matter. "
+                       "Try it on when possible.")
+    elif garment_chest is not None:
+        fit_status = "Body measurement needed"
+        fit_message = (f"{source}: {garment_chest:.1f} in chest circumference. "
+                       "Add your chest circumference in your profile to compare fit.")
+    elif user.chest is not None:
+        fit_status = "Garment measurement needed"
+        fit_message = ("No garment chest measurement available. Measure the top "
+                       "flat from armpit to armpit for a more useful fit check. "
+                       "A photo or size label alone cannot establish fit.")
     else:
-        fit_status = "unknown"
-        fit_message = "No verified garment chest measurement; try on or measure the item."
+        fit_status = "Measurements needed"
+        fit_message = ("Add your chest circumference to your profile and measure "
+                       "the top flat from armpit to armpit. A photo alone "
+                       "cannot reliably establish fit.")
+
+    if measurements.length_inches is not None:
+        fit_message += (f" Entered garment length: {measurements.length_inches:.1f} in "
+                        "(compare with a top you own and like).")
 
     condition_message = ("Visible issues: " + ", ".join(garment.visible_defects)
                          if garment.visible_defects else
                          "No obvious defects detected in this image; hidden wear is possible.")
     recommendation = ("Check comfort before buying. " if alerts else "") + (
-        "Check the fabric label and garment measurements before buying."
-        if not materials or fit_status == "unknown" else
-        "Compare the measured fit with your preferred style before buying.")
+        "Check the fabric label if available and try on the garment before buying."
+        if not materials else
+        "Compare the garment's fit with your preferred style before buying.")
     return FinalAssessment(fit_status=fit_status, fit_message=fit_message,
                            sensory_status=sensory_status, sensory_message=sensory_message,
                            condition_message=condition_message, recommendation=recommendation)

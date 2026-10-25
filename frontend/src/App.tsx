@@ -14,10 +14,18 @@ function Mark() {
   );
 }
 
+type GarmentMeasurements = {
+  pit_to_pit_inches: number | null;
+  length_inches: number | null;
+};
+
+type PreferredFit = "slim" | "regular" | "relaxed";
+
 type Profile = {
   chest: number | null;
   waist: number | null;
   triggers: string[];
+  preferred_fit: PreferredFit;
 };
 
 const PROFILE_KEY = "wolfweave-profile";
@@ -42,6 +50,10 @@ function ProfilePage({
   save: (profile: Profile) => void;
   cancel?: () => void;
 }) {
+  const [preferredFit, setPreferredFit] = useState<PreferredFit>(
+    initial.preferred_fit ?? "regular"
+  );
+
   const [chest, setChest] = useState(
     initial.chest?.toString() ?? ""
   );
@@ -77,7 +89,8 @@ function ProfilePage({
     save({
       chest: chest ? Number(chest) : null,
       waist: waist ? Number(waist) : null,
-      triggers: [...new Set([...selected, ...extra])]
+      triggers: [...new Set([...selected, ...extra])],
+      preferred_fit: preferredFit
     });
   }
 
@@ -95,7 +108,7 @@ function ProfilePage({
         <Mark />
         <span>YOUR COMFORT PROFILE</span>
         {cancel && (
-          <button onClick={cancel}>CANCEL</button>
+          <button onClick={cancel}>BACK</button>
         )}
       </header>
 
@@ -152,6 +165,33 @@ function ProfilePage({
               />
             </label>
           </div>
+
+          <label className="custom-trigger">
+            Preferred fit
+
+            <select
+              value={preferredFit}
+              onChange={event =>
+                setPreferredFit(event.target.value as PreferredFit)
+              }
+              style={{
+                display: "block",
+                width: "100%",
+                marginTop: 8,
+                marginBottom: 24,
+                padding: 12,
+                background: "#252326",
+                color: "#f2efeb",
+                border: "1px solid #7e7070",
+                borderRadius: 2,
+                fontSize: 14
+              }}
+            >
+              <option value="slim">Slim</option>
+              <option value="regular">Regular</option>
+              <option value="relaxed">Relaxed</option>
+            </select>
+          </label>
 
           <h2>Textures & materials to avoid</h2>
 
@@ -260,6 +300,16 @@ type Analysis = {
     condition_message: string;
     recommendation: string;
   } | null;
+  
+  price_rating?: {
+    rating: string;
+    suggested_max_price: number | null;
+    comparable_price: number | null;
+    match_type: string;
+    message: string;
+    source_urls: string[];
+  } | null;
+
 };
 
 const API_URL =
@@ -271,12 +321,57 @@ function Scanner({
   editProfile,
   imageUrl
 }: {
-  scan: (file: File) => void;
+  scan: (
+    file: File,
+    measurements: GarmentMeasurements,
+    tagFile: File | null
+  ) => void;
   error: string | null;
   editProfile: () => void;
   imageUrl: string | null;
 }) {
   const input = useRef<HTMLInputElement>(null);
+
+  const tagInput = useRef<HTMLInputElement>(null);
+
+  const [garmentFile, setGarmentFile] = useState<File | null>(null);
+  const [garmentPreview, setGarmentPreview] = useState<string | null>(null);
+  const [tagFile, setTagFile] = useState<File | null>(null);
+  const [tagPreview, setTagPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!tagFile) {
+      setTagPreview(null);
+      return;
+    }
+
+    const url = URL.createObjectURL(tagFile);
+    setTagPreview(url);
+
+    return () => URL.revokeObjectURL(url);
+  }, [tagFile]);
+
+  useEffect(() => {
+    if (!garmentFile) {
+      setGarmentPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(garmentFile);
+    setGarmentPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [garmentFile]);
+
+  const [pitToPit, setPitToPit] = useState("");
+  const [garmentLength, setGarmentLength] = useState("");
+
+  function positiveOrNull(value: string): number | null {
+    const n = Number(value);
+    return value.trim() && Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  const validMeasurements =
+    (pitToPit.trim() === "" || (Number(pitToPit) > 0 && Number(pitToPit) <= 60)) &&
+    (garmentLength.trim() === "" || (Number(garmentLength) > 0 && Number(garmentLength) <= 80));
 
   function selectImage() {
     input.current?.click();
@@ -301,10 +396,10 @@ function Scanner({
 
         <div className="hanger" />
 
-        {imageUrl ? (
+        {(garmentPreview || imageUrl) ? (
           <img
             className="garment-preview"
-            src={imageUrl}
+            src={garmentPreview || imageUrl || undefined}
             alt="Your uploaded garment"
           />
         ) : (
@@ -318,7 +413,7 @@ function Scanner({
         )}
 
         <div className="scan-line">
-          PLACE LABEL WITHIN FRAME
+          FULL GARMENT / FRONT VIEW
         </div>
 
         <div className="frame tl" />
@@ -338,8 +433,7 @@ function Scanner({
         </div>
 
         <p>
-          Photograph the full garment and collar label
-          in one frame.
+          Add a full garment photo and an optional close-up of its tag.
         </p>
       </section>
 
@@ -355,36 +449,86 @@ function Scanner({
         </p>
       )}
 
-      <div className="scan-actions">
-        <button onClick={selectImage}>
-          Upload
-        </button>
+      <div className="scanner-controls">
+        <div className="scan-actions">
+          <button
+            aria-label={garmentFile ? "Analyze garment" : "Choose garment photo"}
+            title={garmentFile ? "Analyze garment" : "Choose garment photo"}
+            className="shutter"
+            disabled={!validMeasurements}
+            onClick={() => {
+              if (!garmentFile) {
+                selectImage();
+                return;
+              }
+              scan(garmentFile, {
+                pit_to_pit_inches: positiveOrNull(pitToPit),
+                length_inches: positiveOrNull(garmentLength),
+              }, tagFile);
+            }}
+          >
+            <span />
+          </button>
+        </div>
+        
+        <div className="photo-options">
+          <p className="scan-hint">
+            {garmentFile ? "READY TO ANALYZE / PRESS THE CIRCLE" : "CHOOSE A GARMENT PHOTO TO BEGIN"}
+          </p>
+          <input
+            ref={input}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: "none" }}
+            onChange={event => {
+              const file = event.target.files?.[0];
 
-        <button
-          aria-label="Scan garment"
-          className="shutter"
-          onClick={selectImage}
-        >
-          <span />
-        </button>
+              if (file) {
+                setGarmentFile(file);
+              }
 
-        <button onClick={selectImage}>
-          Choose photo
-        </button>
-
-        <input
-          ref={input}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          style={{ display: "none" }}
-          onChange={event => {
-            const file = event.target.files?.[0];
-
-            if (file) scan(file);
-
-            event.target.value = "";
-          }}
-        />
+              event.target.value = "";
+            }}
+          />
+          <button type="button" onClick={() => tagInput.current?.click()}>
+            {tagFile ? `✓ Tag: ${tagFile.name}` : "+ Add tag photo (optional)"}
+          </button>
+          <input
+            ref={tagInput}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: "none" }}
+            onChange={event => {
+              const file = event.target.files?.[0];
+              if (file) setTagFile(file);
+              event.target.value = "";
+            }}
+          />
+          {tagPreview && (
+            <div className="tag-preview">
+              <img src={tagPreview} alt="Clothing tag preview" />
+              <button type="button" onClick={() => setTagFile(null)}>Remove tag</button>
+            </div>
+          )}
+        </div>
+        <section className="fit-inputs" style={{ padding: "20px 24px" }}>
+          <p className="kicker">OPTIONAL / FIT GUIDANCE FOR TOPS</p>
+          <h2>Measure your find</h2>
+          <p>No tag needed. Lay the top flat. Measure across the chest from armpit to armpit, and from shoulder to hem for length.</p>
+          <div className="profile-measurements">
+            <label>
+              Pit-to-pit width (in)
+              <input type="number" min="0.1" max="60" step="0.1" placeholder="e.g. 22"
+                value={pitToPit} onChange={event => setPitToPit(event.target.value)} />
+            </label>
+            <label>
+              Garment length (in)
+              <input type="number" min="0.1" max="80" step="0.1" placeholder="e.g. 27"
+                value={garmentLength} onChange={event => setGarmentLength(event.target.value)} />
+            </label>
+          </div>
+          {!validMeasurements && <p role="alert">Measurements must be positive numbers.</p>}
+        </section>
       </div>
     </main>
   );
@@ -562,6 +706,52 @@ function Report({
           </h2>
         </section>
       )}
+            
+      <section className="thrift-rating">
+        <p className="kicker">04 / THRIFT VALUE</p>
+
+        <h2>
+          {result.price_rating?.rating ||
+            "Not enough pricing data"}
+        </h2>
+
+        {result.price_rating?.suggested_max_price != null && (
+          <div className="thrift-price">
+            ${result.price_rating.suggested_max_price}
+            <span> SUGGESTED MAX PRICE</span>
+          </div>
+        )}
+
+        <p>
+          {result.price_rating?.message ||
+            "No reliable comparable price was found."}
+        </p>
+
+        {result.price_rating?.comparable_price != null && (
+          <small>
+            Comparable listing price: $
+            {result.price_rating.comparable_price.toFixed(2)}
+          </small>
+        )}
+
+        {result.price_rating?.match_type === "similar" && (
+          <small>
+            Estimate based on a similar product, not an exact match.
+          </small>
+        )}
+
+        {result.price_rating?.source_urls.map((url, index) => (
+          <a
+            key={index}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            View price source {index + 1}
+          </a>
+        ))}
+      </section>
+
 
       <button
         className="scan-again"
@@ -630,12 +820,17 @@ export default function App() {
       if (stored) {
         const p = JSON.parse(stored);
 
+        const preferredFit: PreferredFit =
+          p.preferred_fit === "slim" ||
+          p.preferred_fit === "relaxed"
+            ? p.preferred_fit
+            : "regular";
+
         return {
           chest: p.chest ?? null,
           waist: p.waist ?? null,
-          triggers: Array.isArray(p.triggers)
-            ? p.triggers
-            : []
+          triggers: Array.isArray(p.triggers) ? p.triggers : [],
+          preferred_fit: preferredFit
         };
       }
 
@@ -644,13 +839,15 @@ export default function App() {
         waist: null,
         triggers: JSON.parse(
           localStorage.getItem("wolfweave-triggers") || "[]"
-        )
+        ),
+        preferred_fit: "regular"
       };
     } catch {
       return {
         chest: null,
         waist: null,
-        triggers: []
+        triggers: [],
+        preferred_fit: "regular"
       };
     }
   });
@@ -694,7 +891,7 @@ export default function App() {
     setEditing(false);
   }
 
-  async function scan(file: File) {
+  async function scan(file: File, measurements: GarmentMeasurements, tagFile: File | null) {
     setError(null);
 
     if (
@@ -711,6 +908,11 @@ export default function App() {
       return;
     }
 
+    if (tagFile && (!['image/jpeg', 'image/png', 'image/webp'].includes(tagFile.type) || tagFile.size > 10 * 1024 * 1024)) {
+      setError("Tag photo must be JPEG, PNG, or WebP and 10 MB or smaller.");
+      return;
+    }
+
     setImageUrl(URL.createObjectURL(file));
     setView("loading");
 
@@ -718,6 +920,8 @@ export default function App() {
       const form = new FormData();
 
       form.append("image", file);
+      if (tagFile) form.append("tag_image", tagFile);
+      form.append("measurements", JSON.stringify(measurements));
 
       form.append(
         "profile",
