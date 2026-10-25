@@ -11,6 +11,8 @@ from evidence_service import verify_product, build_assessment
 from models import Report, UserProfile, ProductEvidence, GarmentMeasurements
 from pricing_service import get_price_rating
 
+DEMO_MODE = True
+
 app = FastAPI(title="Thrift Fit Scanner API")
 app.add_middleware(
     CORSMiddleware,
@@ -26,13 +28,53 @@ def health():
 
 
 @app.post("/analyze", response_model=Report)
-@app.post("/analyze", response_model=Report)
 async def analyze(
     image: UploadFile = File(...),
     profile: str = Form(...),
     measurements: str = Form(...),
     tag_image: UploadFile | None = File(None),
 ):
+    if DEMO_MODE:
+        return {
+            "garment": {
+                "brand": "H&M",
+                "garment_type": "Sweater",
+                "size": "XL",
+                "product_name": "Mohair/Wool Blend Sweater",
+                "materials": [
+                    {"name": "Mohair", "percentage": None},
+                    {"name": "Wool", "percentage": None}
+                ],
+                "visible_defects": []
+            },
+            "assessment": {
+                "fit_status": "Measured fit guidance",
+                "fit_message": "This sweater offers a relaxed fit with comfortable room through the chest and shoulders.",
+                "sensory_status": "warning",
+                "sensory_message": "Contains wool and mohair, which may feel itchy or irritating for sensitive skin.",
+                "condition_message": "No obvious visible damage detected. Check for pilling and loose threads before purchasing.",
+                "recommendation": "Good option for a relaxed fit. Consider wearing a soft base layer if sensitive to wool."
+            },
+            "sources": [],
+            "shopping_results": [],
+            "price_rating": {
+                "rating": "Fair Price",
+                "suggested_max_price": 35.0,
+                "comparable_price": 42.0,
+                "match_type": "similar",
+                "message": (
+                    "Similar H&M mohair and wool blend sweaters have an "
+                    "illustrative resale price of around $42. "
+                    "Based on the garment's condition and brand, "
+                    "we recommend paying no more than $35."
+                ),
+                "source_urls": []
+            },
+            "sensory_alerts": ["Mohair", "Wool"],
+            "material_status": "Label identified; percentages unknown",
+            "fit_status": "Measured fit guidance",
+            "condition": ["No obvious visible defects detected"],
+        }
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
     max_size = 10 * 1024 * 1024
 
